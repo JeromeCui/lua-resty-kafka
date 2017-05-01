@@ -30,7 +30,7 @@ if not ok then
 end
 
 
-local _M = { _VERSION = "0.01" }
+local _M = { _VERSION = "0.06" }
 local mt = { __index = _M }
 
 
@@ -58,7 +58,7 @@ end
 
 local function produce_encode(self, topic_partitions)
     local req = request:new(request.ProduceRequest,
-                            correlation_id(self), self.client.client_id)
+                            correlation_id(self), self.client.client_id, self.api_version)
 
     req:int16(self.required_acks)
     req:int32(self.request_timeout)
@@ -83,6 +83,7 @@ end
 local function produce_decode(resp)
     local topic_num = resp:int32()
     local ret = new_tab(0, topic_num)
+    local api_version = resp.api_version
 
     for i = 1, topic_num do
         local topic = resp:string()
@@ -90,13 +91,22 @@ local function produce_decode(resp)
 
         ret[topic] = {}
 
+        -- ignore ThrottleTime
         for j = 1, partition_num do
             local partition = resp:int32()
 
-            ret[topic][partition] = {
-                errcode = resp:int16(),
-                offset = resp:int64(),
-            }
+            if api_version == request.API_VERSION_V0 or api_version == request.API_VERSION_V1 then
+                ret[topic][partition] = {
+                    errcode = resp:int16(),
+                    offset = resp:int64(),
+                }
+            elseif api_version == request.API_VERSION_V2 then
+                ret[topic][partition] = {
+                    errcode = resp:int16(),
+                    offset = resp:int64(),
+                    timestamp = resp:int64(), -- If CreateTime is used, this field is always -1
+                }
+            end
         end
     end
 
@@ -266,7 +276,10 @@ local function _flush(premature, self)
 
     _flush_unlock(self)
 
-    if is_exiting() and self.ringbuffer:left_num() > 0 then
+    if ringbuffer:need_send() then
+        _flush_buffer(self)
+
+    elseif is_exiting() and ringbuffer:left_num() > 0 then
         -- still can create 0 timer even exiting
         _flush_buffer(self)
     end
@@ -316,6 +329,7 @@ function _M.new(self, broker_list, producer_config, cluster_name)
         required_acks = opts.required_acks or 1,
         partitioner = opts.partitioner or default_partitioner,
         error_handle = opts.error_handle,
+        api_version = opts.api_version or request.API_VERSION_V2,
         async = async,
         socket_config = cli.socket_config,
         ringbuffer = ringbuffer:new(opts.batch_num or 200, opts.max_buffering or 50000),   -- 200, 50K
@@ -336,12 +350,14 @@ end
 -- offset is cdata (LL in luajit)
 function _M.send(self, topic, key, message)
     if self.async then
-        local ok, err, batch = self.ringbuffer:add(topic, key, message)
+        local ringbuffer = self.ringbuffer
+
+        local ok, err = ringbuffer:add(topic, key, message)
         if not ok then
             return nil, err
         end
 
-        if batch or is_exiting() then
+        if not self.flushing and (ringbuffer:need_send() or is_exiting()) then
             _flush_buffer(self)
         end
 

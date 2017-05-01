@@ -10,7 +10,7 @@ if not ok then
 end
 
 
-local _M = { _VERSION = "0.01" }
+local _M = {}
 local mt = { __index = _M }
 
 function _M.new(self, batch_num, max_buffering)
@@ -42,7 +42,7 @@ function _M.add(self, topic, key, message)
 
     self.num = num + 3
 
-    return true, nil, (self.num / 3 >= self.batch_num)
+    return true
 end
 
 
@@ -69,6 +69,11 @@ end
 
 function _M.left_num(self)
     return self.num / 3
+end
+
+
+function _M.need_send(self)
+    return self.num / 3 >= self.batch_num
 end
 
 

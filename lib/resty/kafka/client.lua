@@ -25,7 +25,7 @@ if not ok then
 end
 
 
-local _M = { _VERSION = "0.01" }
+local _M = { _VERSION = "0.06" }
 local mt = { __index = _M }
 
 
@@ -39,7 +39,7 @@ local function _metadata_cache(self, topic)
         return self.brokers, partitions
     end
 
-    return nil, "not foundd topic"
+    return nil, "not found topic"
 end
 
 
