@@ -43,9 +43,9 @@ local function _metadata_cache(self, topic)
 end
 
 
-local function metadata_encode(client_id, topics, num)
-    local id = 0    -- hard code correlation_id
-    local req = request:new(request.MetadataRequest, id, client_id)
+local function metadata_encode(client_id, correlation_id, topics, num)
+
+    local req = request:new(request.MetadataRequest, correlation_id, client_id)
 
     req:int32(num)
 
@@ -130,7 +130,7 @@ local function _fetch_metadata(self, new_topic)
 
     local broker_list = self.broker_list
     local sc = self.socket_config
-    local req = metadata_encode(self.client_id, topics, num)
+    local req = metadata_encode(self.client_id, self:correlation_id(), topics, num)
 
     for i = 1, #broker_list do
         local host, port = broker_list[i].host, broker_list[i].port
@@ -181,6 +181,7 @@ function _M.new(self, broker_list, client_config)
         brokers = {},
         client_id = "worker" .. pid(),
         socket_config = socket_config,
+        _cid = 0
     }, mt)
 
     if opts.refresh_interval then
@@ -188,6 +189,14 @@ function _M.new(self, broker_list, client_config)
     end
 
     return cli
+end
+
+
+function _M.correlation_id(self)
+    local id = (self._cid + 1) % 1073741824 -- 2^30
+    self._cid = id
+
+    return id
 end
 
 

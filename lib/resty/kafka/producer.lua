@@ -48,17 +48,10 @@ local function default_partitioner(key, num, correlation_id)
 end
 
 
-local function correlation_id(self)
-    local id = (self.correlation_id + 1) % 1073741824 -- 2^30
-    self.correlation_id = id
-
-    return id
-end
-
-
 local function produce_encode(self, topic_partitions)
     local req = request:new(request.ProduceRequest,
-                            correlation_id(self), self.client.client_id, self.api_version)
+                            self.client:correlation_id(),
+                            self.client.client_id, self.api_version)
 
     req:int16(self.required_acks)
     req:int32(self.request_timeout)
@@ -120,7 +113,7 @@ local function choose_partition(self, topic, key)
         return nil, partitions
     end
 
-    return self.partitioner(key, partitions.num, self.correlation_id)
+    return self.partitioner(key, partitions.num, self.client.correlation_id)
 end
 
 
@@ -322,7 +315,6 @@ function _M.new(self, broker_list, producer_config, cluster_name)
     local cli = client:new(broker_list, producer_config)
     local p = setmetatable({
         client = cli,
-        correlation_id = 1,
         request_timeout = opts.request_timeout or 2000,
         retry_backoff = opts.retry_backoff or 100,   -- ms
         max_retry = opts.max_retry or 3,

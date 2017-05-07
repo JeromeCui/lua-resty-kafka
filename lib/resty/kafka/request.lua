@@ -24,6 +24,7 @@ local MESSAGE_VERSION_1 = 1
 _M.API_VERSION_V0 = 0
 _M.API_VERSION_V1 = 1
 _M.API_VERSION_V2 = 2
+_M.API_VERSION_V3 = 3
 
 _M.ProduceRequest = 0
 _M.FetchRequest = 1
@@ -196,7 +197,8 @@ function _M.message_set(self, messages, index)
     local index = index or #messages
 
     local message_version = MESSAGE_VERSION_0
-    if self.api_key == _M.ProduceRequest and self.api_version == _M.API_VERSION_V2 then
+    if self.api_key == _M.ProduceRequest and
+       (self.api_version == _M.API_VERSION_V2 or self.api_version == _M.API_VERSION_V3) then
         message_version = MESSAGE_VERSION_1
     end
 
